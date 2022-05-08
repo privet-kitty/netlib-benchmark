@@ -17,9 +17,10 @@
   (let ((table (make-hash-table :test #'equal)))
     (dolist (path paths)
       (uiop:with-input-file (in path)
+        (read-line in)
         (loop for line = (read-line in nil nil)
               while line
-              for (no name m n nz br obj) = (uiop:split-string line :separator '(#\,))
+              for (name nz size obj) = (uiop:split-string line :separator '(#\,))
               do (setf (gethash name table)
                        (let ((*read-default-float-format*
                                (sb-ext:typexpand 'csc-float)))
@@ -27,29 +28,6 @@
     table))
 
 (defparameter *table* (make-master-table (directory (merge-pathnames  "table-netlib.csv" *netlib-dir*))))
-
-(defun check ()
-  (let ((rowcols
-          (uiop:with-input-file (in (merge-pathnames  "rowcols.txt" *netlib-dir*))
-            (loop for line = (read-line in nil nil)
-                  while line
-                  collect (uiop:split-string line)))))
-    (dolist (path (directory (merge-pathnames "*.SIF" *netlib-dir*)))
-      (print path)
-      (with-open-file (in path)
-        (let* ((problem (m:read-fixed-mps in))
-               (tup (assoc (string-trim '(#\Space) (m:problem-name problem))
-                           rowcols
-                           :test #'string=)))
-          (if tup
-              (destructuring-bind (name row col) tup
-                (let ((actual-row (hash-table-count (m:problem-constraints problem)))
-                      (actual-col (hash-table-count (m:problem-variables problem))))
-                  (unless (= (- (parse-integer row) 1) actual-row)
-                    (format t "~&Row check failed: ~A ~A ~A" name row actual-row))
-                  (unless (= (parse-integer col) actual-col)
-                    (format t "~&Col check failed: ~A ~A ~A" name col actual-col))))
-              (warn "No ~A in the table" (m:problem-name problem))))))))
 
 (defparameter *timeout* 1000d0)
 
@@ -96,7 +74,7 @@
       (m:problem-name mps-problem)
       (unless master-obj-value
         (return-from proc-instance
-          (values name nil nil nil nil)))
+          (values nil nil nil nil nil)))
       (multiple-value-bind (problem obj-offset) (convert-problem mps-problem)
         (let* ((start-time (get-internal-real-time))
                (status (handler-bind
@@ -124,8 +102,9 @@
   (dolist (path (directory (merge-pathnames "*.SIF" *netlib-dir*)))
     (print path)
     (multiple-value-bind (name status obj master-obj time) (proc-instance path)
-      (let ((*read-default-float-format* 'double-float))
-        (format stream "~A,~A,~A,~A,~A~%" name (string status) obj master-obj time)))))
+      (when name
+        (let ((*read-default-float-format* 'double-float))
+          (format stream "~A,~A,~A,~A,~A~%" name (string status) obj master-obj time))))))
 
 #-swank
 (uiop:with-output-file (out "result.csv" :if-exists :supersede)
