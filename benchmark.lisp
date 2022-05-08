@@ -81,11 +81,11 @@
                            ((sb-ext:timeout
                               (lambda (c) (declare (ignorable c))
                                 (return-from proc-instance
-                                  (values name nil nil nil "inf"))))
+                                  (values name :not-solved nil nil "inf"))))
                             (error
                               (lambda (c) (declare (ignorable c))
                                 (return-from proc-instance
-                                  (values name nil nil nil nil)))))
+                                  (values name :not-solved nil nil nil)))))
                          (sb-ext:with-timeout *timeout*
                            (lp-problem-solve problem #'slp-dual-primal!))))
                (end-time (get-internal-real-time))
