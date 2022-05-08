@@ -104,7 +104,8 @@
     (multiple-value-bind (name status obj master-obj time) (proc-instance path)
       (when name
         (let ((*read-default-float-format* 'double-float))
-          (format stream "~A,~A,~A,~A,~A~%" name (string status) obj master-obj time))))))
+          (format stream "~A,~A,~A,~A,~A~%" name (string status) obj master-obj time)
+          (finish-output stream))))))
 
 #-swank
 (uiop:with-output-file (out "result.csv" :if-exists :supersede)
