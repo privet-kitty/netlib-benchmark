@@ -122,6 +122,7 @@
 (defun proc-all (&optional (stream *standard-output*))
   (format stream "name,status,obj,master_obj,time~%")
   (dolist (path (directory (merge-pathnames "*.SIF" *netlib-dir*)))
+    (print path)
     (multiple-value-bind (name status obj master-obj time) (proc-instance path)
       (let ((*read-default-float-format* 'double-float))
         (format stream "~A,~A,~A,~A,~A~%" name (string status) obj master-obj time)))))
