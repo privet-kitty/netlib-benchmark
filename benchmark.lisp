@@ -1,12 +1,12 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (ql:quickload '(:cp/lp :cp/sparse-simplex :cl-mps)))
 
-(defpackage :cp/netlib-test
+(defpackage :netlib-benchmark
   (:use :cl :cp/lp :cp/sparse-simplex)
   (:import-from :cl-mps)
   (:import-from :cp/csc #:csc-float)
   (:local-nicknames (#:m #:cl-mps)))
-(in-package :cp/netlib-test)
+(in-package :netlib-benchmark)
 
 (setq *default-pathname-defaults*
       (uiop:pathname-directory-pathname (uiop:current-lisp-file-pathname)))
@@ -53,38 +53,6 @@
 
 (defparameter *timeout* 1000d0)
 
-(defun proc-instance (path)
-  (with-open-file (in path)
-    (let* ((mps-problem (let* ((*read-default-float-format* (sb-ext:typexpand 'csc-float)))
-                          (m:read-fixed-mps in)))
-           (name (string-trim '(#\Space) (m:problem-name mps-problem)))
-           (master-obj-value (gethash name *table*)))
-      (m:problem-name mps-problem)
-      (unless master-obj-value
-        (return-from proc-instance
-          (values name nil nil nil nil)))
-      (multiple-value-bind (problem obj-offset) (convert-problem mps-problem)
-        (let* ((start-time (get-internal-real-time))
-               (status (handler-bind
-                           ((sb-ext:timeout
-                              (lambda (c) (declare (ignorable c))
-                                (return-from proc-instance
-                                  (values name nil nil nil "inf"))))
-                            (error
-                              (lambda (c) (declare (ignorable c))
-                                (return-from proc-instance
-                                  (values name nil nil nil nil)))))
-                         (sb-ext:with-timeout *timeout*
-                           (lp-problem-solve problem #'slp-dual-primal!))))
-               (end-time (get-internal-real-time))
-               (obj-value (+ obj-offset (lp-problem-obj-value problem)))
-               (time (* (- end-time start-time) 1d-3)))
-          (values name
-                  status
-                  (float obj-value 1d0)
-                  (float master-obj-value 1d0)
-                  time))))))
-
 (defun convert-problem (problem)
   (let ((res (make-lp-problem :sense (m:problem-sense problem)))
         (mps-vars (m:problem-variables problem))
@@ -119,6 +87,38 @@
       (setf (lp-problem-objective res) obj)
       (values res obj-offset))))
 
+(defun proc-instance (path)
+  (with-open-file (in path)
+    (let* ((mps-problem (let* ((*read-default-float-format* (sb-ext:typexpand 'csc-float)))
+                          (m:read-fixed-mps in)))
+           (name (string-trim '(#\Space) (m:problem-name mps-problem)))
+           (master-obj-value (gethash name *table*)))
+      (m:problem-name mps-problem)
+      (unless master-obj-value
+        (return-from proc-instance
+          (values name nil nil nil nil)))
+      (multiple-value-bind (problem obj-offset) (convert-problem mps-problem)
+        (let* ((start-time (get-internal-real-time))
+               (status (handler-bind
+                           ((sb-ext:timeout
+                              (lambda (c) (declare (ignorable c))
+                                (return-from proc-instance
+                                  (values name nil nil nil "inf"))))
+                            (error
+                              (lambda (c) (declare (ignorable c))
+                                (return-from proc-instance
+                                  (values name nil nil nil nil)))))
+                         (sb-ext:with-timeout *timeout*
+                           (lp-problem-solve problem #'slp-dual-primal!))))
+               (end-time (get-internal-real-time))
+               (obj-value (+ obj-offset (lp-problem-obj-value problem)))
+               (time (* (- end-time start-time) 1d-3)))
+          (values name
+                  status
+                  (float obj-value 1d0)
+                  (float master-obj-value 1d0)
+                  time))))))
+
 (defun proc-all (&optional (stream *standard-output*))
   (format stream "name,status,obj,master_obj,time~%")
   (dolist (path (directory (merge-pathnames "*.SIF" *netlib-dir*)))
@@ -127,5 +127,5 @@
         (format stream "~A,~A,~A,~A,~A~%" name (string status) obj master-obj time)))))
 
 #-swank
-(uiop:with-output-file (out "netlib-result.csv" :if-exists :supersede)
+(uiop:with-output-file (out "result.csv" :if-exists :supersede)
   (proc-all out))
